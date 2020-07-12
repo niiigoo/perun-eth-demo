@@ -53,6 +53,35 @@ func Setup() {
 	}
 }
 
+func DeployContracts() error {
+	SetConfig()
+	rng := rand.New(rand.NewSource(0x280a0f350eec))
+	appDef := wtest.NewRandomAddress(rng)
+	payment.SetAppDef(appDef)
+
+	var err error
+	if ethereumBackend, err = ethclient.Dial(config.Chain.URL); err != nil {
+		log.WithError(err).Fatalln("Could not connect to ethereum node.")
+	}
+
+	wallet, acc, err := importAccount(config.SecretKey)
+	if err != nil {
+		return errors.WithMessage(err, "importing secret key")
+	}
+	dialer := net.NewTCPDialer(config.Node.DialTimeout)
+
+	n := &node{
+		log:     log.Get(),
+		onChain: acc,
+		wallet:  wallet,
+		dialer:  dialer,
+		cb:      echannel.NewContractBackend(ethereumBackend, wallet.Ks, &acc.Account),
+		peers:   make(map[string]*peer),
+	}
+
+	return n.setupContracts()
+}
+
 func newNode() (*node, error) {
 	wallet, acc, err := importAccount(config.SecretKey)
 	if err != nil {
